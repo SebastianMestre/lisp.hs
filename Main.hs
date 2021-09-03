@@ -11,8 +11,6 @@ newtype Parser a = Parser {
   run :: String -> Maybe (String, a)
 }
 
--- (<$>) :: (a -> b) -> Parser a -> Parser b
-
 instance Functor Parser where
   fmap f (Parser g) = Parser h
     where h s = (g s) >>= (\(s, a) -> Just (s, f a))
@@ -109,6 +107,7 @@ eval env (ConsExpr (IdExpr "quote") (ConsExpr e NilExpr))  = e
 eval env (ConsExpr (IdExpr "quote") e)  = undefined
 eval env (ConsExpr (IdExpr "eval") (ConsExpr e NilExpr))  = eval env $ eval env e
 eval env (ConsExpr (IdExpr "eval")  e)  = undefined
+eval env (ConsExpr (IdExpr "cons") (ConsExpr e1 (ConsExpr e2 NilExpr))) = ConsExpr (eval env e1) (eval env e2)
 eval env (ConsExpr (IdExpr "let") (ConsExpr (ConsExpr (IdExpr id) (ConsExpr e1 NilExpr)) (ConsExpr e2 NilExpr))) =
   let bound = eval env e1
       newenv = Map.insert id bound env
@@ -120,6 +119,21 @@ interpret :: String -> Maybe Expr
 interpret str = do
   (_, cst) <- run parseExpr str
   return $ eval Map.empty $ desugar cst
+
+prettyPrint :: Expr -> String
+prettyPrint (IdExpr id) = id
+prettyPrint (IntExpr x) = show x
+prettyPrint NilExpr = "<nil>"
+prettyPrint l@(ConsExpr h t) = "(" ++ pInner l ++ ")"
+  where
+  pInner :: Expr -> String
+  pInner (ConsExpr h t) = prettyPrint h ++ pTail t
+    where
+    pTail NilExpr = ""
+    pTail t@(ConsExpr _ _) = " " ++ pInner t
+    pTail t = " . " ++ prettyPrint t
+
+go x = interpret x >>= (return . prettyPrint)
 
 main :: IO ()
 main = return ()
