@@ -100,42 +100,26 @@ desugar (ListCst l) = desugarList l
   where desugarList [] = NilExpr
         desugarList (x:xs) = ConsExpr (desugar x) (desugarList xs)
 
--- (ConsExpr
-  -- (IdExpr "eval")
-  -- (ConsExpr
-    -- (ConsExpr
-      -- (IdExpr "quote")
-      -- (ConsExpr
-        -- (IntExpr 5)
-        -- NilExpr))
-    -- NilExpr))
--- 
--- ("eval" (("quote" (5 Nil)) Nil))
--- 
--- (eval (quote 4))
--- desugar ->
--- (eval (
--- 
--- eval (ConsExpr (IdExpr "eval")  (ConsExpr (IdExpr "quote") e))
--- eval (ConsExpr (IdExpr "quote") e)
--- eval e
-
-{--
-
-(quote . 5)
-
---}
-
 type Env = Map.Map String Expr
 
 eval :: Env -> Expr -> Expr
 eval env n@(IntExpr _)  = n
-eval env (IdExpr id)  = fromMaybe undefined $ Map.lookup id env
+eval env (IdExpr id)  = env Map.! id
 eval env (ConsExpr (IdExpr "quote") (ConsExpr e NilExpr))  = e
 eval env (ConsExpr (IdExpr "quote") e)  = undefined
 eval env (ConsExpr (IdExpr "eval") (ConsExpr e NilExpr))  = eval env $ eval env e
 eval env (ConsExpr (IdExpr "eval")  e)  = undefined
+eval env (ConsExpr (IdExpr "let") (ConsExpr (ConsExpr (IdExpr id) (ConsExpr e1 NilExpr)) (ConsExpr e2 NilExpr))) =
+  let bound = eval env e1
+      newenv = Map.insert id bound env
+  in
+      eval newenv e2
 eval env e  = undefined
+
+interpret :: String -> Maybe Expr
+interpret str = do
+  (_, cst) <- run parseExpr str
+  return $ eval Map.empty $ desugar cst
 
 main :: IO ()
 main = return ()
