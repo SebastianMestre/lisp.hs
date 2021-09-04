@@ -6,6 +6,7 @@ import Data.Functor
 import Data.Maybe
 import Control.Applicative
 import Control.Monad
+import System.Environment
 
 newtype Parser a = Parser {
   run :: String -> Maybe (String, a)
@@ -89,7 +90,10 @@ data Expr
   | IdExpr String
   | ConsExpr Expr Expr
   | NilExpr
+  | LambdaExpr Env [String] Expr
   deriving Show
+
+type Env = Map.Map String Expr
 
 desugar :: Cst -> Expr
 desugar (IntCst n) = (IntExpr n)
@@ -97,8 +101,6 @@ desugar (IdCst s) = (IdExpr s)
 desugar (ListCst l) = desugarList l
   where desugarList [] = NilExpr
         desugarList (x:xs) = ConsExpr (desugar x) (desugarList xs)
-
-type Env = Map.Map String Expr
 
 eval :: Env -> Expr -> Expr
 eval env n@(IntExpr _)  = n
@@ -113,7 +115,27 @@ eval env (ConsExpr (IdExpr "let") (ConsExpr (ConsExpr (IdExpr id) (ConsExpr e1 N
       newenv = Map.insert id bound env
   in
       eval newenv e2
+eval env l@(LambdaExpr _ _ _) = l
+eval env (ConsExpr (IdExpr "lambda") (ConsExpr args (ConsExpr e NilExpr))) = LambdaExpr env (parseArgs args) e
+eval env (ConsExpr f args) = apply (eval env f) (evalEach env args)
+-- ((lambda (x) e) 10)
 eval env e  = undefined
+
+
+parseArgs :: Expr -> [String]
+parseArgs NilExpr = []
+parseArgs (ConsExpr (IdExpr s) t) = s : parseArgs t
+parseArgs e = undefined
+
+evalEach :: Env -> Expr -> [Expr]
+evalEach env NilExpr = []
+evalEach env (ConsExpr h t) = eval env h : evalEach env t
+
+apply :: Expr -> [Expr] -> Expr
+apply (LambdaExpr env params e) args = eval (insertAll env params args) e
+
+insertAll env keys values = foldl insertInto env (zip keys values)
+  where insertInto env (k, v) = Map.insert k v env
 
 interpret :: String -> Maybe Expr
 interpret str = do
@@ -136,4 +158,9 @@ prettyPrint l@(ConsExpr h t) = "(" ++ pInner l ++ ")"
 go x = interpret x >>= (return . prettyPrint)
 
 main :: IO ()
-main = return ()
+main = do
+  args <- getArgs
+  let file = head args
+  content <- readFile file
+  print $ go content
+  
